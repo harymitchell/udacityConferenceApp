@@ -437,7 +437,7 @@ class ConferenceApi(remote.Service):
             raise endpoints.NotFoundException(
                 'No conference found with key: %s' % request.websafeConferenceKey)
         sessions = Session.query(ancestor=conf.key)
-        if request.typeOfSession != '':
+        if request.typeOfSession and request.typeOfSession != '':
             sessions = sessions.filter(Session.typeOfSession == request.typeOfSession)
         return SessionForms(
             items=[self._copySessionToForm(sess) for sess in sessions]
