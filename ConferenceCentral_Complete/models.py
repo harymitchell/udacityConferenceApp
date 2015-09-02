@@ -29,6 +29,7 @@ class Profile(ndb.Model):
     mainEmail = ndb.StringProperty()
     teeShirtSize = ndb.StringProperty(default='NOT_SPECIFIED')
     conferenceKeysToAttend = ndb.StringProperty(repeated=True)
+    sessionWishlist = ndb.StringProperty(repeated=True)
 
 class ProfileMiniForm(messages.Message):
     """ProfileMiniForm -- update Profile form message"""
@@ -41,6 +42,11 @@ class ProfileForm(messages.Message):
     mainEmail = messages.StringField(2)
     teeShirtSize = messages.EnumField('TeeShirtSize', 3)
     conferenceKeysToAttend = messages.StringField(4, repeated=True)
+
+class ProfileSessionWishlist(messages.Message):
+    displayName               = messages.StringField(1)
+    sessionWishlist           = messages.StringField(2, repeated=True)
+    websafeConferenceKey      = messages.StringField(3)
 
 class StringMessage(messages.Message):
     """StringMessage-- outbound (single) string message"""
@@ -106,13 +112,15 @@ class SessionForm(messages.Message):
         speaker
         duration
         typeOfSession
-        date  """
-    name            = messages.StringField(1,required=True)
-    highlights      = messages.StringField(2)
-    speakers        = messages.StringField(3, repeated=True)
-    duration        = messages.IntegerField(4)
-    typeOfSession   = messages.StringField(5)
-    dateTime        = message_types.DateTimeField(6)
+        date
+        websafeKey """
+    name                   = messages.StringField(1,required=True)
+    highlights             = messages.StringField(2)
+    speakers               = messages.StringField(3, repeated=True)
+    duration               = messages.IntegerField(4)
+    typeOfSession          = messages.StringField(5)
+    dateTime               = message_types.DateTimeField(6)
+    websafeSessionKey      = messages.StringField(7)
 
 class SessionQueryForm(messages.Message):
     """SessionQueryForm ::=
@@ -129,6 +137,11 @@ class SessionForms(messages.Message):
     """ SessionForm ::=
             sessions (repeated) """
     items = messages.MessageField(SessionForm, 1, repeated=True)
+
+class SessionWishlistForm(messages.Message):
+    """SessionWishlistForm::=
+        sessionKeys"""
+    sessionKeys = messages.StringField(1, repeated=True)
 
 class TeeShirtSize(messages.Enum):
     """TeeShirtSize -- t-shirt size enumeration value"""

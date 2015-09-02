@@ -28,6 +28,7 @@ from models import ConflictException
 from models import Profile
 from models import ProfileMiniForm
 from models import ProfileForm
+from models import ProfileSessionWishlist
 from models import StringMessage
 from models import BooleanMessage
 from models import Conference
@@ -93,10 +94,16 @@ SESSION_GET_REQUEST = endpoints.ResourceContainer(
     websafeConferenceKey=messages.StringField(1)
 )
 
-SESSION_POST_REQUEST = endpoints.ResourceContainer(
+SESSION_POST_REQUEST_FOR_CONFERENCE = endpoints.ResourceContainer(
     SessionForm,
     websafeConferenceKey=messages.StringField(1)
 )
+
+SESSION_POST_REQUEST_FOR_SESSION = endpoints.ResourceContainer(
+    message_types.VoidMessage,
+    websafeSessionKey=messages.StringField(1)
+)
+
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
@@ -380,18 +387,22 @@ class ConferenceApi(remote.Service):
         )
 
 
-    @endpoints.method(SESSION_POST_REQUEST, SessionForm,
+    @endpoints.method(SESSION_POST_REQUEST_FOR_CONFERENCE, SessionForm,
             path='createSession/{websafeConferenceKey}',
             http_method='POST',
             name='createSession')
     def createSession(self, request):
+        """ Creates Session from given SESSION_POST_REQUEST_FOR_CONFERENCE and returns a SessionForm."""
         # (SessionForm, websafeConferenceKey) -- open only to the organizer of the conference
+        profile = self._getProfileFromUser()
         conf = ndb.Key(urlsafe=request.websafeConferenceKey).get()
         if not conf:
             raise endpoints.NotFoundException(
                 'No conference found with key: %s' % request.websafeConferenceKey)
+        if conf.key.parent().get() != profile:
+            raise endpoints.UnauthorizedException('Session creation is open only to the organizer of the conference!')            
 
-        # copy SESSION_POST_REQUEST/ProtoRPC Message into dict
+        # copy SESSION_POST_REQUEST_FOR_CONFERENCE/ProtoRPC Message into dict
         data = {field.name: getattr(request, field.name) for field in request.all_fields()}
         session = Session(name=data['name'],parent=conf.key)
 
@@ -418,7 +429,7 @@ class ConferenceApi(remote.Service):
         for field in sf.all_fields():
             if hasattr(sess, field.name):
                 setattr(sf, field.name, getattr(sess, field.name))
-            elif field.name == "websafeKey":
+            elif field.name == "websafeSessionKey":
                 setattr(sf, field.name, sess.key.urlsafe())
         # convert Date to date string
         print ('thinking about getting dateTime')
@@ -432,6 +443,7 @@ class ConferenceApi(remote.Service):
         return sf
 
     def _getSessions (self, request):
+        """ Gets sessions for given request, returning SessionForms."""
         conf = ndb.Key(urlsafe=request.websafeConferenceKey).get()
         if not conf:
             raise endpoints.NotFoundException(
@@ -442,6 +454,43 @@ class ConferenceApi(remote.Service):
         return SessionForms(
             items=[self._copySessionToForm(sess) for sess in sessions]
         )
+
+
+    @endpoints.method(SESSION_POST_REQUEST_FOR_SESSION, ProfileSessionWishlist,
+            path='addSessionToWishlist/{websafeSessionKey}',
+            http_method='POST',
+            name='addSessionToWishlist')
+    def addSessionToWishlist(self, request):
+        """ Adds given session to current user profile session wishlist, returns ProfileSessionWishlist"""
+        profile = self._getProfileFromUser()
+        session = ndb.Key(urlsafe=request.websafeSessionKey).get()
+        if not session:
+            raise endpoints.NotFoundException(
+                'No session found with key: %s' % request.websafeSessionKey)
+        profile.sessionWishlist.append(session.key.urlsafe())
+        profile.put()
+        return self._getWishlistForProfile(profile, None)
+
+
+    @endpoints.method(SESSION_GET_REQUEST, ProfileSessionWishlist,
+            path='getSessionsInWishlist/{websafeConferenceKey}',
+            http_method='POST',
+            name='getSessionsInWishlist')
+    def getSessionsInWishlist(self, request):
+        """ Gets all sessions for user profile for given conference, returns ProfileSessionWishlist"""
+        profile = self._getProfileFromUser()
+        sessions = [ndb.Key(urlsafe=sessionKey).get() for sessionKey in profile.sessionWishlist]
+        return SessionForms(
+            items=[self._copySessionToForm(sess) for sess in sessions]
+        )   
+    
+
+    def _getWishlistForProfile (self, profile, conf):
+        """ Returns a ProfileSessionWishlist for given profile and optional conference."""
+        if not type(profile) is Profile:
+            raise endpoints.NotFoundException(
+                'No profile provided!')
+        return ProfileSessionWishlist(displayName=profile.displayName, sessionWishlist=profile.sessionWishlist, websafeConferenceKey=conf.key.urlsafe() if conf else None)
 
 
 # - - - Profile objects - - - - - - - - - - - - - - - - - - -
