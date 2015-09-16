@@ -456,6 +456,19 @@ class ConferenceApi(remote.Service):
         )
 
 
+    @endpoints.method(SESSION_GET_REQUEST, SessionForms,
+            path='getSessionsInWishlist/{websafeConferenceKey}',
+            http_method='POST',
+            name='getSessionsInWishlist')
+    def getSessionsInWishlist(self, request):
+        """ Gets all sessions for user profile for given conference, returns ProfileSessionWishlist"""
+        profile = self._getProfileFromUser()
+        sessions = [ndb.Key(urlsafe=sessionKey).get() for sessionKey in profile.sessionWishlist if ndb.Key(urlsafe=sessionKey).kind() == 'Session' ]
+        return SessionForms(
+            items=[self._copySessionToForm(sess) for sess in sessions]
+        )
+    
+
     @endpoints.method(SESSION_POST_REQUEST_FOR_SESSION, ProfileSessionWishlist,
             path='addSessionToWishlist/{websafeSessionKey}',
             http_method='POST',
@@ -470,19 +483,6 @@ class ConferenceApi(remote.Service):
         profile.sessionWishlist.append(session.key.urlsafe())
         profile.put()
         return self._getWishlistForProfile(profile, None)
-
-
-    @endpoints.method(SESSION_GET_REQUEST, ProfileSessionWishlist,
-            path='getSessionsInWishlist/{websafeConferenceKey}',
-            http_method='POST',
-            name='getSessionsInWishlist')
-    def getSessionsInWishlist(self, request):
-        """ Gets all sessions for user profile for given conference, returns ProfileSessionWishlist"""
-        profile = self._getProfileFromUser()
-        sessions = [ndb.Key(urlsafe=sessionKey).get() for sessionKey in profile.sessionWishlist]
-        return SessionForms(
-            items=[self._copySessionToForm(sess) for sess in sessions]
-        )   
     
 
     def _getWishlistForProfile (self, profile, conf):
