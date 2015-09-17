@@ -132,6 +132,7 @@ class SessionQueryForm(messages.Message):
     speaker         = messages.StringField(2)
     typeOfSession   = messages.StringField(3)
     date            = message_types.DateTimeField(4)
+    duration        = messages.IntegerField(5)
     
 class SessionForms(messages.Message):
     """ SessionForm ::=
@@ -142,6 +143,18 @@ class SessionWishlistForm(messages.Message):
     """SessionWishlistForm::=
         sessionKeys"""
     sessionKeys = messages.StringField(1, repeated=True)
+
+class FeaturedSpeakersForm(messages.Message):
+    """ FeaturedSpeakersForm::=
+        speaker
+        sessions """
+    speaker         = messages.StringField(1, required=True)
+    sessionNames    = messages.StringField(2, repeated=True)
+
+class FeaturedSpeakersForms(messages.Message):
+    """ FeaturedSpeakersForms::=
+            FeaturedSpeakersForm """
+    items           = messages.MessageField(FeaturedSpeakersForm, 1, repeated=True)
 
 class TeeShirtSize(messages.Enum):
     """TeeShirtSize -- t-shirt size enumeration value"""

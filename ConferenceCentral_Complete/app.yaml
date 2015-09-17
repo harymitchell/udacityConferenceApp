@@ -4,6 +4,27 @@ runtime: python27
 api_version: 1
 threadsafe: yes
 
+indexes:
+
+# This index is for fast date access on a Session
+- kind: Session
+  ancestor: yes
+  properties:
+  - name: date
+
+# This index is for fast duration access on a Session
+- kind: Session
+  ancestor: yes
+  properties:
+  - name: duration
+
+# This index is for fast type and timeee access on a Session
+- kind: Session
+  ancestor: yes
+  properties:
+  - name: typeOfSession
+  - name: time
+
 handlers:       # static then dynamic
 
 - url: /favicon\.ico

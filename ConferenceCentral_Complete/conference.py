@@ -36,6 +36,8 @@ from models import ConferenceForm
 from models import ConferenceForms
 from models import ConferenceQueryForm
 from models import ConferenceQueryForms
+from models import FeaturedSpeakersForm
+from models import FeaturedSpeakersForms
 from models import Session
 from models import SessionForm
 from models import SessionForms
@@ -346,7 +348,7 @@ class ConferenceApi(remote.Service):
                 items=[self._copyConferenceToForm(conf, names[conf.organizerUserId]) for conf in \
                 conferences]
         )
-    
+
     #
     ##
     ### Session endpoints
@@ -387,6 +389,76 @@ class ConferenceApi(remote.Service):
         )
 
 
+    @endpoints.method(SESSION_GET_REQUEST, SessionForms,
+            path='getOpeningDaySessions/{websafeConferenceKey}',
+            http_method='POST',
+            name='getOpeningDaySessions')
+    def getOpeningDaySessions(self, request):
+        """ Returns all Sessions on opening day of given conference.
+        :type request: SESSION_GET_REQUEST
+        """
+        conf = ndb.Key(urlsafe=request.websafeConferenceKey).get()
+        if not conf:
+            raise endpoints.NotFoundException(
+                'No conference found with key: %s' % request.websafeConferenceKey)
+        sessions = Session.query(Session.date == conf.startDate, ancestor=conf.key)
+        return SessionForms(
+            items=[self._copySessionToForm(sess) for sess in sessions]
+        )
+
+
+    @endpoints.method(SESSION_GET_REQUEST, SessionForms,
+            path='getSessionsByMinimumDuration/{websafeConferenceKey}',
+            http_method='POST',
+            name='getSessionsByMinimumDuration')
+    def getSessionsByMinimumDuration(self, request):
+        """ Returns all Sessions for given conference with a minimum duration as requested.
+        :type request: SESSION_GET_REQUEST
+        """
+        conf = ndb.Key(urlsafe=request.websafeConferenceKey).get()
+        if not conf:
+            raise endpoints.NotFoundException(
+                'No conference found with key: %s' % request.websafeConferenceKey)
+        sessions = Session.query(Session.duration <= request.duration, ancestor=conf.key)
+        return SessionForms(
+            items=[self._copySessionToForm(sess) for sess in sessions]
+        )
+
+
+    @endpoints.method(SESSION_GET_REQUEST, SessionForms,
+            path='getSessionsAfterTimeExcludingType/{websafeConferenceKey}',
+            http_method='POST',
+            name='getSessionsAfterTimeExcludingType')
+    def getSessionsAfterTimeExcludingType(self, request):
+        """ This query returns sessions for given conference starting after given time,
+            and excluding the given type. """
+        # Solves the problem:
+        # Let's say you dont like workshops and you sont like sessions before 7pm.
+        #  How would you handle a query for all non-workshop sessions before 7 pm?
+        #  is the problem for implementing this query? What ways to solve it did you think of?
+        # Solution:
+        #  The following query is my proposal. Ancestor query for time and typeOfSession (indexed).
+        #  The encountered problem is "BadRequestError: Only one inequality filter per query is supported."
+        #  which can be solved by using twp separate queries for each inequality, getting the intersection
+        #  of the keys, and then retrieving the entities from the intersected keys.
+        conf = ndb.Key(urlsafe=request.websafeConferenceKey).get()
+        if not conf:
+            raise endpoints.NotFoundException(
+                'No conference found with key: %s' % request.websafeConferenceKey)
+        if not request.date and request.date.time():
+            raise endpoints.NotFoundException(
+                'Query must include a valid date and time.')
+        sessionsByTime = Session.query(Session.time >= request.date.time(),ancestor=conf.key)
+        sessKeysByTime = sessionsByTime.fetch(None, keys_only=True)
+        sessionsByType = Session.query(Session.typeOfSession != request.typeOfSession,ancestor=conf.key)
+        sessKeysByType = sessionsByType.fetch(None, keys_only=True)
+        validSessKeys  =  set(sessKeysByTime).intersection(set(sessKeysByType))
+        sessions       = ndb.get_multi(validSessKeys)
+        return SessionForms(
+            items=[self._copySessionToForm(sess) for sess in sessions]
+        )
+
+
     @endpoints.method(SESSION_POST_REQUEST_FOR_CONFERENCE, SessionForm,
             path='createSession/{websafeConferenceKey}',
             http_method='POST',
@@ -400,7 +472,7 @@ class ConferenceApi(remote.Service):
             raise endpoints.NotFoundException(
                 'No conference found with key: %s' % request.websafeConferenceKey)
         if conf.key.parent().get() != profile:
-            raise endpoints.UnauthorizedException('Session creation is open only to the organizer of the conference!')            
+            raise endpoints.UnauthorizedException('Session creation is open only to the organizer of the conference!')
 
         # copy SESSION_POST_REQUEST_FOR_CONFERENCE/ProtoRPC Message into dict
         data = {field.name: getattr(request, field.name) for field in request.all_fields()}
@@ -418,9 +490,30 @@ class ConferenceApi(remote.Service):
             session.duration = data['duration']
         if data['speakers']:
             session.speakers = data['speakers']
+            # When a new session is added to a conference, check the speaker.
+            # If there is more than one session by this speaker at this conference,
+            # also add a new Memcache entry that features the speaker and session names.
+            # You can choose the Memcache key.
+            featuredSpeakers = [] # list of TUPLE (speaker, [session.name])
+            for speaker in session.speakers:
+                sessionsBySpeaker = Session.query(Session.speakers == speaker)
+                if sessionsBySpeaker.count() > 0:
+                    featuredSpeakers.extend((speaker, [sess.name for sess in sessionsBySpeaker]))
+            if len(featuredSpeakers) > 0:
+                memcache.set("testKey", featuredSpeakers)
 
         session.put()
         return self._copySessionToForm(session)
+
+
+    @endpoints.method(message_types.VoidMessage, SessionForm,
+            path='getFeaturedSpeaker',
+            http_method='POST',
+            name='creagetFeaturedSpeakerteSession')
+    def getFeaturedSpeaker(self, request):
+        """ Gets the current featured speakers. """
+        if memcache.get("testKey"):
+            pass
 
 
     def _copySessionToForm(self, sess):
@@ -483,7 +576,24 @@ class ConferenceApi(remote.Service):
         profile.sessionWishlist.append(session.key.urlsafe())
         profile.put()
         return self._getWishlistForProfile(profile, None)
+<<<<<<< HEAD
     
+=======
+
+
+    @endpoints.method(SESSION_GET_REQUEST, ProfileSessionWishlist,
+            path='getSessionsInWishlist/{websafeConferenceKey}',
+            http_method='POST',
+            name='getSessionsInWishlist')
+    def getSessionsInWishlist(self, request):
+        """ Gets all sessions for user profile for given conference, returns ProfileSessionWishlist"""
+        profile = self._getProfileFromUser()
+        sessions = [ndb.Key(urlsafe=sessionKey).get() for sessionKey in profile.sessionWishlist]
+        return SessionForms(
+            items=[self._copySessionToForm(sess) for sess in sessions]
+        )
+
+>>>>>>> origin/master
 
     def _getWishlistForProfile (self, profile, conf):
         """ Returns a ProfileSessionWishlist for given profile and optional conference."""
