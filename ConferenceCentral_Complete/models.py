@@ -90,13 +90,13 @@ class ConferenceForms(messages.Message):
     
 class Session(ndb.Model):
     """Session ::=
-        Session name
+        name
         highlights
         speaker
         duration
         typeOfSession
         date
-        start time (in 24 hour notation so it can be ordered)."""
+        time (in 24 hour notation so it can be ordered)."""
     name            = ndb.StringProperty(required=True)
     highlights      = ndb.StringProperty()
     speakers        = ndb.StringProperty(repeated=True)

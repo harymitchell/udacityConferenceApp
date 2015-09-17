@@ -23,6 +23,36 @@ App Engine application for the Udacity training course.
 1. (Optional) Generate your client library(ies) with [the endpoints tool][6].
 1. Deploy your application.
 
+## Session Design Choices
+Session ::=
+    name
+    highlights
+    speaker
+    duration
+    typeOfSession
+    date
+    time
+    
+Sessions consist of a name, highlights, a list of speakers, duration, type, date, and time.
+Speakers are implemented only as string values.
+
+## Featured Speakers
+Upon created of a session, for sessions with any speakers, we add a task to the default queue with the URL /tasks/add_featured_speaker.
+In main.py, AddFeaturedSpeaker passes the session Key back to ConferenceApi._addFeaturedSpeaker, which will examine the speakers.
+ConferenceApi._addFeaturedSpeaker builds a data structure featuredSpeakers which is list of TUPLE (speaker, [session.name]),
+and this structure is added in the memcache. GetFeaturedSpeaker then has the responsibiliy of retrieval and conversion.
+This process does support multiple featured speakers, if a session is created with multiple speakers who are speaking in other sessions.
+
+## Other design considerations
+For the problem of those who dont like workshops or sessions before 7pm:
+getSessionsAfterTimeExcludingType:
+The encountered problem is "BadRequestError: Only one inequality filter per query is supported.",
+which can be solved by using twp separate queries for each inequality, getting the intersection
+of the keys, and then retrieving the entities from the intersected keys.
+
+## Other queries
+1. getSessionsByMinimumDuration returns all Sessions for given conference with a minimum duration as requested.
+1. getOpeningDaySessions returns all Sessions on opening day of given conference.
 
 [1]: https://developers.google.com/appengine
 [2]: http://python.org
