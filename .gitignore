@@ -44,3 +44,7 @@ $RECYCLE.BIN/
 Network Trash Folder
 Temporary Items
 .apdisk
+ConferenceCentral_Complete/conference.pyc
+ConferenceCentral_Complete/main.pyc
+*.pyc
+ConferenceCentral_Complete/main.pyc

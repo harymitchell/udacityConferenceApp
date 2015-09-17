@@ -50,6 +50,7 @@ from settings import IOS_CLIENT_ID
 from settings import ANDROID_AUDIENCE
 
 from utils import getUserId
+import logging
 
 EMAIL_SCOPE = endpoints.EMAIL_SCOPE
 API_EXPLORER_CLIENT_ID = endpoints.API_EXPLORER_CLIENT_ID
@@ -224,7 +225,7 @@ class ConferenceApi(remote.Service):
                 setattr(conf, field.name, data)
         conf.put()
         prof = ndb.Key(Profile, user_id).get()
-        return self._copyConferenceToForm(conf, getattr(prof, 'displayName'))
+        return self._copyConferenceToForm(conf, getattr(prof, 'displayName') if prof else None)
 
 
     @endpoints.method(ConferenceForm, ConferenceForm, path='conference',
@@ -254,7 +255,7 @@ class ConferenceApi(remote.Service):
                 'No conference found with key: %s' % request.websafeConferenceKey)
         prof = conf.key.parent().get()
         # return ConferenceForm
-        return self._copyConferenceToForm(conf, getattr(prof, 'displayName'))
+        return self._copyConferenceToForm(conf, getattr(prof, 'displayName') if prof else None)
 
 
     @endpoints.method(message_types.VoidMessage, ConferenceForms,
@@ -273,7 +274,7 @@ class ConferenceApi(remote.Service):
         prof = ndb.Key(Profile, user_id).get()
         # return set of ConferenceForm objects per Conference
         return ConferenceForms(
-            items=[self._copyConferenceToForm(conf, getattr(prof, 'displayName')) for conf in confs]
+            items=[self._copyConferenceToForm(conf, getattr(prof, 'displayName') if prof else None) for conf in confs]
         )
 
 
@@ -490,30 +491,44 @@ class ConferenceApi(remote.Service):
             session.duration = data['duration']
         if data['speakers']:
             session.speakers = data['speakers']
-            # When a new session is added to a conference, check the speaker.
-            # If there is more than one session by this speaker at this conference,
-            # also add a new Memcache entry that features the speaker and session names.
-            # You can choose the Memcache key.
-            featuredSpeakers = [] # list of TUPLE (speaker, [session.name])
-            for speaker in session.speakers:
-                sessionsBySpeaker = Session.query(Session.speakers == speaker)
-                if sessionsBySpeaker.count() > 0:
-                    featuredSpeakers.extend((speaker, [sess.name for sess in sessionsBySpeaker]))
-            if len(featuredSpeakers) > 0:
-                memcache.set("testKey", featuredSpeakers)
 
         session.put()
+        
+        if data['speakers']:
+            session.speakers = data['speakers']
+            logging.debug("Creating session with speakers, adding task to taskqueue.", str(session))
+            taskqueue.add(url='/tasks/add_featured_speaker', params={'sessionKeyUrlSafe': session.key.urlsafe()})
         return self._copySessionToForm(session)
+    
+    @staticmethod
+    def _addFeaturedSpeaker(sessionKeyUrlSafe):
+        """ When a new session is added to a conference, check the speaker.
+            If there is more than one session by this speaker at this conference,
+            also add a new Memcache entry that features the speaker and session names.
+            You can choose the Memcache key."""
+        logging.debug("ConferenceApi._addFeaturedSpeaker", "adding featured speakers to memcache, if any.")
+        session =  ndb.Key(urlsafe=sessionKeyUrlSafe).get()
+        featuredSpeakers = [] # list of TUPLE (speaker, [session.name])
+        for speaker in session.speakers:
+            sessionsBySpeaker = Session.query(Session.speakers == speaker)
+            if sessionsBySpeaker.count() > 0:
+                featuredSpeakers.append((speaker, [sess.name for sess in sessionsBySpeaker]))
+        if len(featuredSpeakers) > 0:
+            memcache.set("testKey", featuredSpeakers)
 
 
-    @endpoints.method(message_types.VoidMessage, SessionForm,
+    @endpoints.method(message_types.VoidMessage, FeaturedSpeakersForms,
             path='getFeaturedSpeaker',
             http_method='POST',
-            name='creagetFeaturedSpeakerteSession')
+            name='getFeaturedSpeaker')
     def getFeaturedSpeaker(self, request):
         """ Gets the current featured speakers. """
-        if memcache.get("testKey"):
-            pass
+        logging.info("ConferenceApi.getFeaturedSpeaker", "retrieving featured speakers from memcache, if any.")
+        featuredSpeakers = memcache.get("testKey")
+        if featuredSpeakers :
+            return FeaturedSpeakersForms(items=[FeaturedSpeakersForm(speaker=item[0], sessionNames=item[1]) for item in featuredSpeakers])
+        else:
+            return FeaturedSpeakersForms(items=[])
 
 
     def _copySessionToForm(self, sess):
@@ -576,9 +591,6 @@ class ConferenceApi(remote.Service):
         profile.sessionWishlist.append(session.key.urlsafe())
         profile.put()
         return self._getWishlistForProfile(profile, None)
-<<<<<<< HEAD
-    
-=======
 
 
     @endpoints.method(SESSION_GET_REQUEST, ProfileSessionWishlist,
@@ -593,7 +605,6 @@ class ConferenceApi(remote.Service):
             items=[self._copySessionToForm(sess) for sess in sessions]
         )
 
->>>>>>> origin/master
 
     def _getWishlistForProfile (self, profile, conf):
         """ Returns a ProfileSessionWishlist for given profile and optional conference."""
