@@ -24,14 +24,6 @@ App Engine application for the Udacity training course.
 1. Deploy your application.
 
 ## Session Design Choices
-Session ::=
-    name
-    highlights
-    speaker
-    duration
-    typeOfSession
-    date
-    time
     
 Sessions consist of a name, highlights, a list of speakers, duration, type, date, and time.
 Speakers are implemented only as string values.
