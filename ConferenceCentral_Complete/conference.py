@@ -361,7 +361,8 @@ class ConferenceApi(remote.Service):
             http_method='POST',
             name='getConferenceSessions')
     def getConferenceSessions(self, request):
-        #(websafeConferenceKey) -- Given a conference, return all sessions
+        """ Returns all sessions for a given conerence 
+            (websafeConferenceKey) """
         return self._getSessions (request)
 
 
@@ -370,8 +371,8 @@ class ConferenceApi(remote.Service):
             http_method='POST',
             name='getConferenceSessionsByType')
     def getConferenceSessionsByType(self, request):
-        # (websafeConferenceKey, typeOfSession)
-        # Given a conference, return all sessions of a specified type (eg lecture, keynote, workshop)
+        """ Given a conference, return all sessions of a specified type (eg lecture, keynote, workshop)
+        (websafeConferenceKey, typeOfSession) """
         return self._getSessions (request)
 
 
@@ -380,8 +381,8 @@ class ConferenceApi(remote.Service):
             http_method='POST',
             name='getSessionsBySpeaker')
     def getSessionsBySpeaker(self, request):
-        # (speaker) -- Given a speaker, return all sessions
-        # given by this particular speaker, across all conferences
+        """ (speaker) -- Given a speaker, return all sessions
+         given by this particular speaker, across all conferences """
         sessions = Session.query()
         if request.speaker:
             sessions = sessions.filter(Session.speakers == request.speaker)
@@ -540,9 +541,7 @@ class ConferenceApi(remote.Service):
             elif field.name == "websafeSessionKey":
                 setattr(sf, field.name, sess.key.urlsafe())
         # convert Date to date string
-        print ('thinking about getting dateTime')
         if hasattr(sess, 'date') and hasattr(sess, 'time'):
-            print ('getting dateTime')
             date = getattr(sess, 'date')
             time = getattr(sess, 'time')
             if date and time:
@@ -591,19 +590,6 @@ class ConferenceApi(remote.Service):
         profile.sessionWishlist.append(session.key.urlsafe())
         profile.put()
         return self._getWishlistForProfile(profile, None)
-
-
-    @endpoints.method(SESSION_GET_REQUEST, ProfileSessionWishlist,
-            path='getSessionsInWishlist/{websafeConferenceKey}',
-            http_method='POST',
-            name='getSessionsInWishlist')
-    def getSessionsInWishlist(self, request):
-        """ Gets all sessions for user profile for given conference, returns ProfileSessionWishlist"""
-        profile = self._getProfileFromUser()
-        sessions = [ndb.Key(urlsafe=sessionKey).get() for sessionKey in profile.sessionWishlist]
-        return SessionForms(
-            items=[self._copySessionToForm(sess) for sess in sessions]
-        )
 
 
     def _getWishlistForProfile (self, profile, conf):
